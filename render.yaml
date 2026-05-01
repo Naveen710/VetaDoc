@@ -1,0 +1,20 @@
+services:
+  # Backend — Express API
+  - type: web
+    name: vetadoc-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: FRONTEND_URL
+        value: https://vetadoc.netlify.app
+      - key: ADMIN_URL
+        value: https://vetadoc-admin.netlify.app
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
