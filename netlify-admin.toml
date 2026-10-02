@@ -1,9 +1,0 @@
-[build]
-  command = "npm run build:admin"
-  publish = "dist-admin"
-
-# SPA routing — send all routes to admin.html
-[[redirects]]
-  from = "/*"
-  to = "/admin.html"
-  status = 200

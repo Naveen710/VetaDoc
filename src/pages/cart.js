@@ -207,9 +207,11 @@ export default function renderCart(container) {
             const btn = document.getElementById('checkout-btn');
             btn.disabled = true;
             let paid;
+            let payOrderId = null;
             try {
                 const payOrder = await createPaymentOrder({ amount: payable, purpose: 'order' });
                 if (payOrder?.error) throw new Error(payOrder.error);
+                payOrderId = payOrder.orderId;
                 paid = await collectPayment(payOrder, 'Medicines order');
             } catch (err) {
                 btn.disabled = false;
@@ -222,8 +224,9 @@ export default function renderCart(container) {
                 status: needsRx ? 'awaiting_rx' : 'processing',
                 total: subtotal,
                 payable,
-                paymentId: paid.paymentId,
-                paymentStatus: paid.demo ? 'demo' : 'paid',
+                // Marked 'paid' server-side once Razorpay's signature is verified.
+                paymentOrderId: payOrderId,
+                paymentStatus: paid.demo ? 'demo' : 'pending',
                 rxId: needsRx ? attachedRxId : null,
                 items: state.cart.map(i => ({ productId: i.productId, name: i.name, emoji: i.emoji, qty: i.qty, price: i.price, rxRequired: Boolean(i.prescriptionRequired) })),
                 prescriptionUploaded: needsRx,

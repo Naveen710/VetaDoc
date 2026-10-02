@@ -1,0 +1,26 @@
+rules_version = '2';
+
+// VetaDoc — Storage rules
+// prescriptions/{uid}/...  : uploaded by the owner, read by owner + staff
+// lab-reports/{uid}/...    : written by staff, read by owner + staff
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function staff() { return signedIn() && request.auth.token.get('role', 'parent') in ['admin', 'vet', 'pharmacist']; }
+    function okFile() {
+      return request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png)|application/pdf');
+    }
+
+    match /prescriptions/{uid}/{file} {
+      allow read: if signedIn() && (request.auth.uid == uid || staff());
+      allow create: if signedIn() && request.auth.uid == uid && okFile();
+      allow update, delete: if false;
+    }
+
+    match /lab-reports/{uid}/{file} {
+      allow read: if signedIn() && (request.auth.uid == uid || staff());
+      allow write: if staff() && okFile();
+    }
+  }
+}

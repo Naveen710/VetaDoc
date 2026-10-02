@@ -6,6 +6,7 @@ import { getState, getCartCount } from '../store.js';
 import { formatPrice, formatDate, daysUntil } from '../utils/helpers.js';
 import { navigate } from '../router.js';
 import { checkBackendHealth } from '../utils/api.js';
+import { remindersDue } from '../../shared/vaccineSchedules.js';
 
 export default async function renderDashboard(container) {
     const state = getState();
@@ -17,16 +18,14 @@ export default async function renderDashboard(container) {
 
     // Check backend status
     const health = await checkBackendHealth();
-    const backendOnline = health && !health.error;
+    const liveData = health.live;
 
     // Vaccination reminders
+    // Species schedule (shared with the daily reminder function)
     const vaccReminders = [];
     pets.forEach(pet => {
-        (pet.vaccinations || []).forEach(v => {
-            const days = daysUntil(v.nextDue);
-            if (days <= 60 && days > 0) {
-                vaccReminders.push({ petName: pet.name, petEmoji: pet.emoji, vaccine: v.name, daysLeft: days, dueDate: v.nextDue });
-            }
+        remindersDue(pet, new Date(), 60).forEach(item => {
+            vaccReminders.push({ petName: pet.name, petEmoji: pet.emoji, vaccine: item.name, daysLeft: item.days, dueDate: item.dueDate });
         });
     });
     vaccReminders.sort((a, b) => a.daysLeft - b.daysLeft);
@@ -35,19 +34,12 @@ export default async function renderDashboard(container) {
     <div class="page-container">
       <!-- Welcome Header -->
       <div style="margin-bottom:var(--space-8)">
-        <h1 style="font-size:var(--text-2xl)">Welcome back, <span style="color:var(--color-primary)">${user.name}</span> 👋</h1>
+        <h1 style="font-size:var(--text-2xl)">Welcome back, <span style="color:var(--color-primary)">${state.session?.name || user.name}</span></h1>
         <p style="color:var(--text-secondary);margin-top:var(--space-2);font-size:var(--text-sm)">Here's what's happening with your pets and orders.</p>
-        ${backendOnline ? `
-          <div style="display:inline-flex;align-items:center;gap:var(--space-2);margin-top:var(--space-2);padding:var(--space-1) var(--space-3);background:rgba(16,185,129,0.06);border-radius:var(--radius-full);font-size:var(--text-xs);color:var(--color-success)">
-            <span style="width:6px;height:6px;background:var(--color-success);border-radius:50%;display:inline-block"></span>
-            Backend connected · WhatsApp ${health.whatsapp === 'configured' ? '✅ Live' : '⚠️ Demo'}
-          </div>
-        ` : `
-          <div style="display:inline-flex;align-items:center;gap:var(--space-2);margin-top:var(--space-2);padding:var(--space-1) var(--space-3);background:rgba(245,158,11,0.06);border-radius:var(--radius-full);font-size:var(--text-xs);color:var(--color-warning)">
-            <span style="width:6px;height:6px;background:var(--color-warning);border-radius:50%;display:inline-block"></span>
-            Backend offline — Start server: cd server && npm start
-          </div>
-        `}
+        <div style="display:inline-flex;align-items:center;gap:var(--space-2);margin-top:var(--space-2);padding:var(--space-1) var(--space-3);background:var(--surface-tint);border-radius:var(--radius-full);font-size:var(--text-xs);color:var(--color-primary)">
+          <span style="width:6px;height:6px;background:currentColor;border-radius:50%;display:inline-block"></span>
+          ${liveData ? 'Synced to your VetaDoc account' : 'Demo mode · data is stored in this browser only'}
+        </div>
       </div>
 
       <!-- Stats Cards -->
@@ -139,7 +131,7 @@ export default async function renderDashboard(container) {
                     <div style="font-size:var(--text-sm);font-weight:var(--font-medium)">${r.petName} — ${r.vaccine}</div>
                     <div style="font-size:var(--text-xs);color:var(--text-tertiary)">Due: ${formatDate(r.dueDate)}</div>
                   </div>
-                  <span class="badge ${r.daysLeft <= 30 ? 'badge-warning' : 'badge-neutral'}">${r.daysLeft}d left</span>
+                  <span class="badge ${r.daysLeft <= 30 ? 'badge-warning' : 'badge-neutral'}">${r.daysLeft < 0 ? `${-r.daysLeft}d overdue` : r.daysLeft === 0 ? 'Today' : `${r.daysLeft}d left`}</span>
                 </div>
               `).join('')}
             </div>

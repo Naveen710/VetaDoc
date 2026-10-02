@@ -10,6 +10,12 @@ import { openModal, closeModal } from '../components/modal.js';
 import { sendBookingWhatsApp, createPaymentOrder } from '../utils/api.js';
 import { collectPayment } from '../utils/payments.js';
 
+/** Video room for a consult. Jitsi Meet works on low bandwidth with no app install;
+ *  swap for a JWT-secured Jitsi or Agora room before scale. */
+function videoRoom(c) {
+    return `https://meet.jit.si/VetaDoc-${encodeURIComponent(c.id)}-${encodeURIComponent((c.petId || c.petName || 'pet').replace(/\W/g, ''))}`;
+}
+
 const DAY_INDEX = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 /** Next calendar date (YYYY-MM-DD, local) for a weekday label like 'Mon'. */
 function nextDateFor(day) {
@@ -61,6 +67,7 @@ export default function renderConsultation(container) {
                 </div>
                 ${c.notes ? `<p style="font-size:var(--text-xs);color:var(--text-tertiary);margin-top:var(--space-3);font-style:italic">${c.notes}</p>` : ''}
                 <div style="display:flex;gap:var(--space-2);margin-top:var(--space-3)">
+                  ${c.type === 'Video Call' ? `<a class="btn btn-primary btn-sm" href="${videoRoom(c)}" target="_blank" rel="noopener"><span class="material-icons-round">videocam</span> Join call</a>` : ''}
                   <button class="whatsapp-btn" data-whatsapp-consult="${c.id}">
                     <span class="material-icons-round">chat</span>
                     Chat on WhatsApp
@@ -280,8 +287,7 @@ export default function renderConsultation(container) {
                         petId: pet?.id || null,
                         fee: vet.consultationFee,
                         paymentOrderId: payment?.orderId || null,
-                        paymentStatus: paid.demo ? 'demo' : 'paid',
-                        paymentId: paid.paymentId,
+                        paymentStatus: paid.demo ? 'demo' : 'pending', // set to 'paid' by verifyPayment
                         consentAt: Date.now(),
                         whatsappOptIn: Boolean(sendWhatsApp),
                         ownerPhone: state.session?.phone || state.user.phone

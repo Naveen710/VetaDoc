@@ -1,0 +1,107 @@
+rules_version = '2';
+
+// VetaDoc — Firestore security rules
+// Roles come from Auth custom claims (request.auth.token.role), set only
+// by the `setUserRole` Cloud Function. Default role = parent.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function role() { return signedIn() ? request.auth.token.get('role', 'parent') : null; }
+    function isAdmin() { return role() == 'admin'; }
+    function isVet() { return role() == 'vet'; }
+    function isPharmacist() { return role() == 'pharmacist'; }
+    function isStaff() { return role() in ['admin', 'vet', 'pharmacist']; }
+    function owns(data) { return signedIn() && data.ownerUid == request.auth.uid; }
+    function unchanged(fields) { return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields); }
+
+    // ── Users ──
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid && !('role' in request.resource.data);
+      allow update: if signedIn() && request.auth.uid == uid && unchanged(['role', 'status']);
+      allow update: if isAdmin();
+    }
+
+    // ── Pets + health records ──
+    match /pets/{petId} {
+      allow read: if owns(resource.data) || isStaff();
+      allow create: if owns(request.resource.data);
+      allow update: if owns(resource.data) && owns(request.resource.data);
+      allow update: if isVet() && unchanged(['ownerUid']);
+      allow delete: if owns(resource.data);
+
+      match /records/{recordId} {
+        function pet() { return get(/databases/$(database)/documents/pets/$(petId)).data; }
+        allow read: if owns(pet()) || isStaff();
+        allow create: if (owns(pet()) || isVet()) && request.resource.data.createdBy == request.auth.uid;
+        // A record can be removed by whoever wrote it; vets' records are kept for the clinical trail.
+        allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;
+        allow update: if false;
+      }
+    }
+
+    // ── Consultations ──
+    match /consultations/{id} {
+      allow read: if owns(resource.data) || isVet() || isAdmin();
+      allow create: if owns(request.resource.data) && request.resource.data.consentAt is int
+                    && request.resource.data.paymentStatus == 'pending';
+      allow update: if owns(resource.data) && unchanged(['ownerUid', 'vetId', 'paymentStatus', 'paymentId', 'soap']);
+      allow update: if isVet() || isAdmin();
+    }
+
+    // ── Prescriptions ──
+    // Parents may upload (status 'uploaded'); vets issue ('issued');
+    // only pharmacists/admins (via function) move to verified/rejected/dispensed.
+    match /prescriptions/{id} {
+      allow read: if owns(resource.data) || isStaff();
+      allow create: if (owns(request.resource.data) && request.resource.data.status == 'uploaded')
+                    || (isVet() && request.resource.data.status == 'issued' && request.resource.data.vetUid == request.auth.uid);
+      allow update: if owns(resource.data) && unchanged(['status', 'reviewedBy', 'reviewNote', 'ownerUid']);
+      allow update: if isPharmacist() || isAdmin();
+    }
+
+    // ── Orders ──
+    match /orders/{id} {
+      allow read: if owns(resource.data) || isPharmacist() || isAdmin();
+      allow create: if owns(request.resource.data)
+                    && request.resource.data.status in ['processing', 'awaiting_rx']
+                    && request.resource.data.paymentStatus == 'pending';
+      // Owners can't change status, payment or batch data; staff can.
+      allow update: if owns(resource.data) && unchanged(['ownerUid', 'status', 'paymentStatus', 'paymentId', 'batches', 'total', 'payable']);
+      allow update: if isPharmacist() || isAdmin();
+    }
+
+    // ── Catalogue & directory (public read) ──
+    match /products/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /vets/{id} {
+      allow read: if resource.data.verified == true || isAdmin();
+      allow write: if isAdmin();
+      allow update: if isVet() && request.auth.uid == resource.data.uid && unchanged(['verified', 'registrationNo', 'council']);
+    }
+
+    // ── Notifications (written by functions) ──
+    match /notifications/{id} {
+      allow read, delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow update: if signedIn() && resource.data.uid == request.auth.uid
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+    }
+
+    // ── Home sample collection ──
+    match /sampleCollections/{id} {
+      allow read: if owns(resource.data) || isStaff();
+      allow create: if owns(request.resource.data) && request.resource.data.status == 'scheduled';
+      allow update: if isStaff();
+    }
+
+    // ── Payments (functions only) ──
+    match /payments/{id} {
+      allow read: if owns(resource.data) || isAdmin();
+      allow write: if false;
+    }
+  }
+}
