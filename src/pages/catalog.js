@@ -14,7 +14,7 @@ export default function renderCatalog(container) {
     let filters = {
         search: window.__vetadoc_search || '',
         category: window.__vetadoc_category || '',
-        species: '',
+        species: window.__vetadoc_species || '',
         brand: '',
         maxPrice: 1100,
         inStock: false,
@@ -25,6 +25,7 @@ export default function renderCatalog(container) {
     // Clear globals
     window.__vetadoc_search = '';
     window.__vetadoc_category = '';
+    window.__vetadoc_species = '';
 
     function getFilteredProducts() {
         return products.filter(p => {

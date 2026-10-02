@@ -15,6 +15,8 @@ export default function renderOrders(container) {
         delivered: 'badge-success',
         shipped: 'badge-info',
         processing: 'badge-warning',
+        awaiting_rx: 'badge-warning',
+        rx_rejected: 'badge-error',
         cancelled: 'badge-error'
     };
 
@@ -22,8 +24,11 @@ export default function renderOrders(container) {
         delivered: 'check_circle',
         shipped: 'local_shipping',
         processing: 'hourglass_top',
+        awaiting_rx: 'fact_check',
+        rx_rejected: 'report',
         cancelled: 'cancel'
     };
+    const statusLabels = { awaiting_rx: 'Prescription check', rx_rejected: 'Prescription rejected' };
 
     container.innerHTML = `
     <div class="page-container">
@@ -52,7 +57,7 @@ export default function renderOrders(container) {
                   <div style="font-size:var(--text-xs);color:var(--text-tertiary)">Placed on ${formatDate(order.date)}</div>
                 </div>
                 <span class="badge ${statusColors[order.status]} badge-dot">
-                  ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                  ${statusLabels[order.status] || order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                 </span>
                 <div style="font-weight:var(--font-bold);font-family:var(--font-display)">${formatPrice(order.total)}</div>
                 <button class="btn btn-sm btn-secondary" data-reorder="${order.id}">

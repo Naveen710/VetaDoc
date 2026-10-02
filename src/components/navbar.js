@@ -3,9 +3,40 @@
 // ═══════════════════════════════════════════════════
 
 import { getState, getCartCount, subscribe, toggleTheme } from '../store.js';
+import { signOut } from '../services/auth.js';
 import { navigate } from '../router.js';
 import { debounce } from '../utils/helpers.js';
 import { renderNotificationBell, initNotificationCenter } from './notificationCenter.js';
+
+function accountHTML(state) {
+    const s = state.session;
+    if (!s) return `<a class="btn btn-primary btn-sm" href="#/login" id="nav-signin">Sign in</a>`;
+    return `
+      <button class="account-btn" id="nav-dashboard-btn" title="${s.name}" aria-haspopup="menu">
+        <span class="account-initial">${(s.name || '?').trim().charAt(0).toUpperCase()}</span>
+      </button>
+      <div class="account-menu" id="account-menu" role="menu" hidden>
+        <div class="account-head"><b>${s.name}</b><span>${s.phone || s.email || ''}${s.demo ? ' · demo' : ''}</span></div>
+        <a href="#/dashboard" role="menuitem"><span class="material-icons-round">dashboard</span> Dashboard</a>
+        <a href="#/pets" role="menuitem"><span class="material-icons-round">pets</span> Health records</a>
+        <a href="#/prescriptions" role="menuitem"><span class="material-icons-round">medication</span> Prescriptions</a>
+        <a href="#/orders" role="menuitem"><span class="material-icons-round">local_shipping</span> Orders</a>
+        ${s.role !== 'parent' ? `<a href="/admin.html" role="menuitem"><span class="material-icons-round">admin_panel_settings</span> Staff workspace</a>` : ''}
+        <button id="nav-signout" role="menuitem"><span class="material-icons-round">logout</span> Sign out</button>
+      </div>`;
+}
+
+function bindAccount() {
+    const menu = document.getElementById('account-menu');
+    document.getElementById('nav-dashboard-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (menu) menu.hidden = !menu.hidden;
+    });
+    document.getElementById('nav-signout')?.addEventListener('click', async () => {
+        await signOut();
+        navigate('/');
+    });
+}
 
 export function renderNavbar() {
     const state = getState();
@@ -61,9 +92,7 @@ export function renderNavbar() {
             <span class="material-icons-round">shopping_cart</span>
             ${cartCount > 0 ? `<span class="cart-count">${cartCount}</span>` : ''}
           </button>
-          <button class="btn-icon" id="nav-dashboard-btn" title="Dashboard">
-            <span class="material-icons-round">account_circle</span>
-          </button>
+          <div class="account-wrap" id="account-wrap" style="position:relative">${accountHTML(state)}</div>
           <button class="btn-icon mobile-menu-btn" id="mobile-menu-btn">
             <span class="material-icons-round">menu</span>
           </button>
@@ -85,7 +114,16 @@ export function initNavbar() {
     // Navigation buttons
     document.getElementById('nav-cart-btn')?.addEventListener('click', () => navigate('/cart'));
     document.getElementById('nav-orders-btn')?.addEventListener('click', () => navigate('/orders'));
-    document.getElementById('nav-dashboard-btn')?.addEventListener('click', () => navigate('/dashboard'));
+    bindAccount();
+    document.addEventListener('click', () => { const m = document.getElementById('account-menu'); if (m) m.hidden = true; });
+    let lastUid = getState().session?.uid || null;
+    subscribe((st) => {
+        const uid = st.session?.uid || null;
+        if (uid === lastUid) return;
+        lastUid = uid;
+        const wrap = document.getElementById('account-wrap');
+        if (wrap) { wrap.innerHTML = accountHTML(st); bindAccount(); }
+    });
 
     // Global search
     const searchInput = document.getElementById('global-search');

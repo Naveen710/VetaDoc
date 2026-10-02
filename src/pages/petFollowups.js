@@ -12,7 +12,7 @@ import { navigate } from '../router.js';
 const followUpTypes = [
     { id: 'medication', label: 'Medication Check', icon: '💊', color: '#3b82f6' },
     { id: 'post-surgery', label: 'Post-Surgery Review', icon: '🩹', color: '#ef4444' },
-    { id: 'vaccination', label: 'Vaccination Follow-up', icon: '💉', color: '#10b981' },
+    { id: 'vaccination', label: 'Vaccination Follow-up', icon: '💉', color: '#0f766e' },
     { id: 'diet', label: 'Diet & Nutrition Review', icon: '🥗', color: '#f59e0b' },
     { id: 'dental', label: 'Dental Check-up', icon: '🦷', color: '#8b5cf6' },
     { id: 'wellness', label: 'General Wellness', icon: '❤️', color: '#ec4899' },

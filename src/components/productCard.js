@@ -10,7 +10,7 @@ export function renderProductCard(product) {
 
     return `
     <div class="product-card" data-product-id="${product.id}">
-      <div class="product-card-image">
+      <div class="product-card-image tile-${product.category}">
         <span class="product-emoji">${product.emoji}</span>
         <div class="product-card-badges">
           ${discount > 0 ? `<span class="badge badge-success">${discount}% OFF</span>` : ''}

@@ -6,3 +6,8 @@ server/node_modules/
 server/.env
 .DS_Store
 *.log
+.firebaserc
+.env.local
+functions/node_modules/
+functions/shared/
+.firebase/
