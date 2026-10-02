@@ -6,10 +6,16 @@ import { formatPrice, formatDate } from '../utils/helpers.js';
 import { getAdminStats, getRevenueChart, getTopProducts, getAdminUsers, getSampleCollections, updateUserStatus } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 import { navigate } from '../router.js';
+import { renderRxQueue } from './rxQueue.js';
+import { getState } from '../store.js';
+import { signOut } from '../services/auth.js';
 
-let activeTab = 'overview';
+let activeTab = null;
 
 export default async function renderAdminPortal(container) {
+    const role = getState().session?.role;
+    const isAdmin = role === 'admin';
+    if (!activeTab) activeTab = isAdmin ? 'overview' : 'rx';
     container.innerHTML = `
     <div class="admin-layout">
       <aside class="admin-sidebar">
@@ -23,30 +29,36 @@ export default async function renderAdminPortal(container) {
           </div>
         </div>
         <nav class="admin-nav">
-          <button class="admin-nav-item ${activeTab === 'overview' ? 'active' : ''}" data-admin-tab="overview">
+          ${isAdmin ? `<button class="admin-nav-item ${activeTab === 'overview' ? 'active' : ''}" data-admin-tab="overview">
             <span class="material-icons-round">dashboard</span> Overview
+          </button>` : ''}
+          <button class="admin-nav-item ${activeTab === 'rx' ? 'active' : ''}" data-admin-tab="rx">
+            <span class="material-icons-round">fact_check</span> Prescription checks
           </button>
           <button class="admin-nav-item ${activeTab === 'orders' ? 'active' : ''}" data-admin-tab="orders">
             <span class="material-icons-round">receipt_long</span> Orders
           </button>
-          <button class="admin-nav-item ${activeTab === 'products' ? 'active' : ''}" data-admin-tab="products">
+          ${isAdmin ? `<button class="admin-nav-item ${activeTab === 'products' ? 'active' : ''}" data-admin-tab="products">
             <span class="material-icons-round">inventory_2</span> Products
-          </button>
-          <button class="admin-nav-item ${activeTab === 'users' ? 'active' : ''}" data-admin-tab="users">
+          </button>` : ''}
+          ${isAdmin ? `<button class="admin-nav-item ${activeTab === 'users' ? 'active' : ''}" data-admin-tab="users">
             <span class="material-icons-round">people</span> Users
-          </button>
+          </button>` : ''}
           <button class="admin-nav-item ${activeTab === 'consultations' ? 'active' : ''}" data-admin-tab="consultations">
             <span class="material-icons-round">video_call</span> Consultations
           </button>
           <button class="admin-nav-item ${activeTab === 'samples' ? 'active' : ''}" data-admin-tab="samples">
             <span class="material-icons-round">science</span> Sample Collections
           </button>
-          <button class="admin-nav-item ${activeTab === 'settings' ? 'active' : ''}" data-admin-tab="settings">
+          ${isAdmin ? `<button class="admin-nav-item ${activeTab === 'settings' ? 'active' : ''}" data-admin-tab="settings">
             <span class="material-icons-round">settings</span> Settings
-          </button>
+          </button>` : ''}
           <div style="flex:1"></div>
           <button class="admin-nav-item" id="admin-back-btn">
-            <span class="material-icons-round">arrow_back</span> Back to Site
+            <span class="material-icons-round">arrow_back</span> Back to site
+          </button>
+          <button class="admin-nav-item" id="admin-signout-btn">
+            <span class="material-icons-round">logout</span> Sign out
           </button>
         </nav>
       </aside>
@@ -66,7 +78,8 @@ export default async function renderAdminPortal(container) {
         });
     });
 
-    document.getElementById('admin-back-btn')?.addEventListener('click', () => navigate('/'));
+    document.getElementById('admin-back-btn')?.addEventListener('click', () => { window.location.href = '/'; });
+    document.getElementById('admin-signout-btn')?.addEventListener('click', async () => { await signOut(); window.location.reload(); });
 
     // Render initial tab
     await renderActiveTab(document.getElementById('admin-main-content'));
@@ -77,6 +90,7 @@ async function renderActiveTab(mainEl) {
 
     switch (activeTab) {
         case 'overview': await renderOverview(mainEl); break;
+        case 'rx': await renderRxQueue(mainEl); break;
         case 'orders': renderOrdersTab(mainEl); break;
         case 'products': renderProductsTab(mainEl); break;
         case 'users': await renderUsersTab(mainEl); break;

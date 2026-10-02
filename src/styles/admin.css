@@ -589,7 +589,7 @@
 .urgency-item.critical .urgency-dot { background: #ef4444; }
 .urgency-item.high .urgency-dot { background: #f97316; }
 .urgency-item.medium .urgency-dot { background: #f59e0b; }
-.urgency-item.low .urgency-dot { background: #10b981; }
+.urgency-item.low .urgency-dot { background: #0f766e; }
 
 /* ── WhatsApp Button ── */
 .whatsapp-btn {

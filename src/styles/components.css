@@ -35,12 +35,12 @@
 .btn-primary {
     background: var(--gradient-primary);
     color: var(--text-inverse);
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+    box-shadow: 0 2px 8px rgba(15, 118, 110, 0.35);
 }
 
 .btn-primary:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
+    box-shadow: 0 4px 16px rgba(15, 118, 110, 0.4);
 }
 
 .btn-primary:active {
@@ -147,8 +147,8 @@
 }
 
 .badge-success {
-    background: rgba(16, 185, 129, 0.15);
-    color: #059669;
+    background: rgba(15, 118, 110, 0.15);
+    color: #115e59;
 }
 
 .badge-warning {
@@ -416,9 +416,9 @@
     font-weight: var(--font-bold);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    background: rgba(99, 102, 241, 0.12);
+    background: rgba(249, 115, 82, 0.12);
     color: var(--color-secondary);
-    border: 1px solid rgba(99, 102, 241, 0.2);
+    border: 1px solid rgba(249, 115, 82, 0.2);
 }
 
 .rx-badge .material-icons-round {

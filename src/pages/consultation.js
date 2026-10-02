@@ -7,7 +7,18 @@ import { bookConsultation, getState } from '../store.js';
 import { renderStars, formatPrice, generateId } from '../utils/helpers.js';
 import { showToast } from '../components/toast.js';
 import { openModal, closeModal } from '../components/modal.js';
-import { sendBookingWhatsApp } from '../utils/api.js';
+import { sendBookingWhatsApp, createPaymentOrder } from '../utils/api.js';
+import { collectPayment } from '../utils/payments.js';
+
+const DAY_INDEX = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+/** Next calendar date (YYYY-MM-DD, local) for a weekday label like 'Mon'. */
+function nextDateFor(day) {
+    const d = new Date();
+    const target = DAY_INDEX[day];
+    if (target !== undefined) d.setDate(d.getDate() + ((target - d.getDay() + 7) % 7 || 7));
+    else d.setDate(d.getDate() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 export default function renderConsultation(container) {
     const state = getState();
@@ -212,6 +223,11 @@ export default function renderConsultation(container) {
             <textarea class="input" id="consult-notes" rows="3" placeholder="Describe your pet's symptoms or reason for consultation..."></textarea>
           </div>
 
+          <label style="display:flex;align-items:flex-start;gap:var(--space-2);cursor:pointer;font-size:var(--text-sm);line-height:1.5">
+            <input type="checkbox" id="consult-consent" style="margin-top:3px" />
+            <span>I consent to a remote consultation. I understand the vet may ask for an in-clinic visit, and that certificates, euthanasia and trauma cases cannot be handled online. In an emergency I will use SOS.</span>
+          </label>
+
           <label style="display:flex;align-items:center;gap:var(--space-2);cursor:pointer;font-size:var(--text-sm)">
             <input type="checkbox" id="consult-whatsapp" checked />
             <span class="material-icons-round" style="font-size:16px;color:#25D366">chat</span>
@@ -233,18 +249,42 @@ export default function renderConsultation(container) {
                     const typeSelect = document.getElementById('consult-type');
                     const notesInput = document.getElementById('consult-notes');
                     const sendWhatsApp = document.getElementById('consult-whatsapp')?.checked;
+                    if (!document.getElementById('consult-consent')?.checked) {
+                        showToast('Consent needed', 'Please confirm consent for a remote consultation', 'warning');
+                        return;
+                    }
+                    const payment = await createPaymentOrder({ amount: vet.consultationFee, purpose: 'consultation', refId: vet.id });
+                    if (payment?.error) {
+                        showToast('Payment failed', payment.error, 'error');
+                        return;
+                    }
+                    let paid;
+                    try {
+                        paid = await collectPayment(payment, `Consultation with ${vet.name}`);
+                    } catch (err) {
+                        showToast('Payment not completed', err.message, 'warning');
+                        return;
+                    }
 
-                    const bookingId = 'VC-' + String(Math.floor(Math.random() * 999)).padStart(3, '0');
+                    const bookingId = 'VC-' + Date.now().toString(36).toUpperCase();
                     const consultation = {
                         id: bookingId,
                         vetId: vet.id,
                         vetName: vet.name,
                         petName: pet ? pet.name : 'Other',
-                        date: selected ? `2026-02-${String(13 + Math.floor(Math.random() * 5)).padStart(2, '0')}` : '2026-02-14',
+                        date: nextDateFor(selected?.day),
                         time: selected ? selected.time : '10:00',
                         type: typeSelect?.value || 'Video Call',
                         status: 'upcoming',
-                        notes: notesInput?.value || ''
+                        notes: notesInput?.value || '',
+                        petId: pet?.id || null,
+                        fee: vet.consultationFee,
+                        paymentOrderId: payment?.orderId || null,
+                        paymentStatus: paid.demo ? 'demo' : 'paid',
+                        paymentId: paid.paymentId,
+                        consentAt: Date.now(),
+                        whatsappOptIn: Boolean(sendWhatsApp),
+                        ownerPhone: state.session?.phone || state.user.phone
                     };
 
                     bookConsultation(consultation);

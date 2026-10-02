@@ -2,7 +2,12 @@
 // VetaDoc — Cart Page
 // ═══════════════════════════════════════════════════
 
-import { getState, removeFromCart, updateCartQty, clearCart, getCartTotal, placeOrder } from '../store.js';
+import { getState, removeFromCart, updateCartQty, clearCart, getCartTotal, placeOrder, addPrescription } from '../store.js';
+import { uploadPrescriptionFile, createPaymentOrder } from '../utils/api.js';
+import { collectPayment } from '../utils/payments.js';
+
+// The prescription attached to this checkout (id of a store prescription).
+let attachedRxId = null;
 import { products } from '../data/products.js';
 import { formatPrice, generateId } from '../utils/helpers.js';
 import { navigate } from '../router.js';
@@ -17,6 +22,9 @@ export default function renderCart(container) {
         const items = state.cart;
         const total = getCartTotal();
         const hasRx = items.some(i => i.prescriptionRequired);
+        const usableRx = (state.prescriptions || []).filter(r => ['issued', 'verified', 'uploaded'].includes(r.status));
+        if (attachedRxId && !usableRx.some(r => r.id === attachedRxId)) attachedRxId = null;
+        const attached = usableRx.find(r => r.id === attachedRxId);
 
         // Smart recommendations based on cart items
         const cartSpecies = new Set();
@@ -100,10 +108,22 @@ export default function renderCart(container) {
               </div>
 
               ${hasRx ? `
-                <button class="btn btn-secondary w-full" id="cart-upload-rx" style="margin-bottom:var(--space-3)">
-                  <span class="material-icons-round">upload_file</span>
-                  Upload Prescription
-                </button>
+                <div class="rx-attach" style="border:1px solid var(--border-color);border-radius:14px;padding:var(--space-3);margin-bottom:var(--space-3)">
+                  <div style="font-weight:600;font-size:var(--text-sm);margin-bottom:6px;display:flex;align-items:center;gap:6px">
+                    <span class="material-icons-round" style="color:var(--color-coral);font-size:18px">medication</span> Prescription for Rx items
+                  </div>
+                  ${usableRx.length ? `
+                    <select class="select" id="cart-rx-select" style="margin-bottom:8px">
+                      <option value="">Choose a prescription…</option>
+                      ${usableRx.map(r => `<option value="${r.id}" ${r.id === attachedRxId ? 'selected' : ''}>${r.id} · ${r.petName || 'Pet'} · ${r.vetName || 'Uploaded'} (${r.status})</option>`).join('')}
+                    </select>` : ''}
+                  <button class="btn btn-secondary w-full btn-sm" id="cart-upload-rx">
+                    <span class="material-icons-round">upload_file</span> Upload from my vet
+                  </button>
+                  <p style="font-size:var(--text-xs);color:var(--text-tertiary);margin-top:8px">
+                    ${attached ? `Attached ${attached.id}. A pharmacist checks it before we pack your order.` : 'Rx items ship only after a licensed pharmacist checks a valid prescription.'}
+                  </p>
+                </div>
               ` : ''}
 
               <button class="btn btn-primary w-full btn-lg" id="checkout-btn">
@@ -170,17 +190,46 @@ export default function renderCart(container) {
             }
         });
 
-        document.getElementById('checkout-btn')?.addEventListener('click', () => {
+        document.getElementById('cart-rx-select')?.addEventListener('change', (e) => {
+            attachedRxId = e.target.value || null;
+            render();
+        });
+
+        document.getElementById('checkout-btn')?.addEventListener('click', async () => {
             const state = getState();
+            const needsRx = state.cart.some(i => i.prescriptionRequired);
+            if (needsRx && !attachedRxId) {
+                showToast('Prescription needed', 'Choose or upload a prescription for the Rx items', 'warning');
+                return;
+            }
+            const subtotal = getCartTotal();
+            const payable = subtotal + (subtotal >= 499 ? 0 : 49);
+            const btn = document.getElementById('checkout-btn');
+            btn.disabled = true;
+            let paid;
+            try {
+                const payOrder = await createPaymentOrder({ amount: payable, purpose: 'order' });
+                if (payOrder?.error) throw new Error(payOrder.error);
+                paid = await collectPayment(payOrder, 'Medicines order');
+            } catch (err) {
+                btn.disabled = false;
+                showToast('Payment not completed', err.message, 'warning');
+                return;
+            }
             const order = {
-                id: 'VD-2026-' + String(Math.floor(Math.random() * 99999)).padStart(5, '0'),
+                id: 'VD-' + Date.now().toString(36).toUpperCase(),
                 date: new Date().toISOString().split('T')[0],
-                status: 'processing',
-                total: getCartTotal(),
-                items: state.cart.map(i => ({ productId: i.productId, name: i.name, emoji: i.emoji, qty: i.qty, price: i.price })),
-                prescriptionUploaded: state.cart.some(i => i.prescriptionRequired),
+                status: needsRx ? 'awaiting_rx' : 'processing',
+                total: subtotal,
+                payable,
+                paymentId: paid.paymentId,
+                paymentStatus: paid.demo ? 'demo' : 'paid',
+                rxId: needsRx ? attachedRxId : null,
+                items: state.cart.map(i => ({ productId: i.productId, name: i.name, emoji: i.emoji, qty: i.qty, price: i.price, rxRequired: Boolean(i.prescriptionRequired) })),
+                prescriptionUploaded: needsRx,
                 tracking: [
                     { status: 'Order Placed', time: new Date().toLocaleString('en-IN'), detail: 'Your order has been placed successfully', completed: true },
+                    ...(needsRx ? [{ status: 'Prescription check', time: '', detail: 'A pharmacist is verifying your prescription', completed: false }] : []),
                     { status: 'Processing', time: '', detail: 'Your order will be processed shortly', completed: false },
                     { status: 'Shipped', time: '', detail: '', completed: false },
                     { status: 'Delivered', time: '', detail: '', completed: false },
@@ -188,28 +237,70 @@ export default function renderCart(container) {
                 address: state.user.address
             };
             placeOrder(order);
-            showToast('Order Placed!', `Order ${order.id} placed successfully`, 'success');
+            attachedRxId = null;
+            showToast('Order placed', needsRx ? `${order.id} · waiting for prescription check` : `Order ${order.id} placed successfully`, 'success');
             navigate('/orders');
         });
 
         document.getElementById('cart-upload-rx')?.addEventListener('click', () => {
-            openModal('Upload Prescription', `
+            const pets = getState().pets || [];
+            openModal('Upload prescription', `
         <div style="display:flex;flex-direction:column;gap:var(--space-4)">
-          <p style="font-size:var(--text-sm);color:var(--text-secondary)">Upload a valid veterinary prescription for your Rx-required items.</p>
-          <div style="border:2px dashed var(--border-color);border-radius:var(--radius-xl);padding:var(--space-8);text-align:center;cursor:pointer">
-            <span class="material-icons-round" style="font-size:48px;color:var(--text-tertiary)">cloud_upload</span>
-            <p style="margin-top:var(--space-2);font-weight:var(--font-medium)">Click to upload</p>
-            <p style="font-size:var(--text-xs);color:var(--text-tertiary)">JPG, PNG, PDF up to 5MB</p>
+          <p style="font-size:var(--text-sm);color:var(--text-secondary)">Upload a clear photo or PDF of a prescription signed by a registered veterinarian. It must show the vet's name, registration number, date, the animal and the medicine with dose.</p>
+          <div class="input-group">
+            <label>For which animal?</label>
+            <select class="select" id="rx-pet">${pets.map(p => `<option value="${p.id}">${p.emoji || '🐾'} ${p.name}</option>`).join('')}<option value="">Other</option></select>
           </div>
+          <div class="input-group">
+            <label>Prescribing vet (name and registration no.)</label>
+            <input class="input" id="rx-vet" placeholder="e.g., Dr. K. Rao, TSVC/2011/0456" />
+          </div>
+          <label style="border:2px dashed var(--border-color);border-radius:var(--radius-xl);padding:var(--space-6);text-align:center;cursor:pointer;display:block">
+            <span class="material-icons-round" style="font-size:40px;color:var(--text-tertiary)">cloud_upload</span>
+            <p style="margin-top:var(--space-2);font-weight:var(--font-medium)" id="rx-file-label">Choose file</p>
+            <p style="font-size:var(--text-xs);color:var(--text-tertiary)">JPG, PNG or PDF, up to 5 MB</p>
+            <input type="file" id="rx-file" accept="image/jpeg,image/png,application/pdf" hidden />
+          </label>
         </div>
       `, `
         <button class="btn btn-ghost" onclick="document.getElementById('modal-close-btn').click()">Cancel</button>
-        <button class="btn btn-primary" id="submit-cart-rx-btn"><span class="material-icons-round">check</span> Submit</button>
+        <button class="btn btn-primary" id="submit-cart-rx-btn"><span class="material-icons-round">check</span> Attach prescription</button>
       `);
             setTimeout(() => {
-                document.getElementById('submit-cart-rx-btn')?.addEventListener('click', () => {
-                    closeModal();
-                    showToast('Prescription Uploaded', 'Will be verified during processing', 'success');
+                const input = document.getElementById('rx-file');
+                input?.addEventListener('change', () => {
+                    const f = input.files?.[0];
+                    document.getElementById('rx-file-label').textContent = f ? f.name : 'Choose file';
+                });
+                document.getElementById('submit-cart-rx-btn')?.addEventListener('click', async () => {
+                    const file = input?.files?.[0];
+                    if (!file) { showToast('No file', 'Choose a photo or PDF of the prescription', 'warning'); return; }
+                    if (file.size > 5 * 1024 * 1024) { showToast('File too large', 'Maximum size is 5 MB', 'warning'); return; }
+                    const btn = document.getElementById('submit-cart-rx-btn');
+                    btn.disabled = true; btn.textContent = 'Uploading…';
+                    try {
+                        const uploaded = await uploadPrescriptionFile(file);
+                        const pet = pets.find(p => p.id === document.getElementById('rx-pet')?.value);
+                        const rx = {
+                            id: 'RX-' + Date.now().toString(36).toUpperCase(),
+                            petId: pet?.id || null,
+                            petName: pet?.name || 'Other',
+                            source: 'upload',
+                            vetName: document.getElementById('rx-vet')?.value.trim() || '',
+                            date: new Date().toISOString().slice(0, 10),
+                            file: uploaded,
+                            items: getState().cart.filter(i => i.prescriptionRequired).map(i => ({ name: i.name })),
+                            status: 'uploaded',
+                        };
+                        addPrescription(rx);
+                        attachedRxId = rx.id;
+                        closeModal();
+                        showToast('Prescription attached', 'A pharmacist will verify it before dispatch', 'success');
+                        render();
+                    } catch (err) {
+                        btn.disabled = false; btn.textContent = 'Attach prescription';
+                        showToast('Upload failed', err.message, 'error');
+                    }
                 });
             }, 100);
         });

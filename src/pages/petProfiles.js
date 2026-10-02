@@ -13,7 +13,7 @@ export default function renderPetProfiles(container) {
         const state = getState();
         const pets = state.pets;
 
-        const speciesEmoji = { dog: '🐕', cat: '🐈', bird: '🐦', cattle: '🐄', horse: '🐴', fish: '🐟' };
+        const speciesEmoji = { dog: '🐕', cat: '🐈', cattle: '🐄', buffalo: '🐃', goat: '🐐', sheep: '🐑', poultry: '🐔', bird: '🐦', horse: '🐴', fish: '🐟' };
 
         container.innerHTML = `
       <div class="page-container">
@@ -21,13 +21,13 @@ export default function renderPetProfiles(container) {
           <div>
             <h1 style="font-size:var(--text-2xl);display:flex;align-items:center;gap:var(--space-3)">
               <span class="material-icons-round" style="color:var(--color-primary)">pets</span>
-              My Pets
+              My Animals
             </h1>
-            <p style="color:var(--text-secondary);margin-top:var(--space-2);font-size:var(--text-sm)">Manage your pet profiles, track vaccinations, and get personalized product recommendations.</p>
+            <p style="color:var(--text-secondary);margin-top:var(--space-2);font-size:var(--text-sm)">Health records, vaccine plans and reminders for every pet and farm animal.</p>
           </div>
           <button class="btn btn-primary" id="add-pet-btn">
             <span class="material-icons-round">add</span>
-            Add New Pet
+            Add animal
           </button>
         </div>
 
@@ -97,6 +97,10 @@ export default function renderPetProfiles(container) {
                   ` : ''}
 
                   <div style="display:flex;gap:var(--space-2);margin-top:var(--space-4)">
+                    <button class="btn btn-primary btn-sm" style="flex:1" data-open-record="${pet.id}">
+                      <span class="material-icons-round" style="font-size:14px">folder_shared</span>
+                      Health record
+                    </button>
                     <button class="btn btn-secondary btn-sm" style="flex:1" data-shop-for="${pet.species}">
                       <span class="material-icons-round" style="font-size:14px">storefront</span>
                       Shop for ${pet.name}
@@ -127,8 +131,12 @@ export default function renderPetProfiles(container) {
               <select class="select" id="pet-species">
                 <option value="dog">🐕 Dog</option>
                 <option value="cat">🐈 Cat</option>
-                <option value="bird">🐦 Bird</option>
-                <option value="cattle">🐄 Cattle</option>
+                <option value="cattle">🐄 Cow / bull</option>
+                <option value="buffalo">🐃 Buffalo</option>
+                <option value="goat">🐐 Goat</option>
+                <option value="sheep">🐑 Sheep</option>
+                <option value="poultry">🐔 Poultry</option>
+                <option value="bird">🐦 Pet bird</option>
                 <option value="horse">🐴 Horse</option>
                 <option value="fish">🐟 Fish</option>
               </select>
@@ -147,8 +155,8 @@ export default function renderPetProfiles(container) {
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)">
             <div class="input-group">
-              <label>Age (years)</label>
-              <input type="number" class="input" id="pet-age" placeholder="e.g., 3" min="0" max="30" />
+              <label>Date of birth (or best guess)</label>
+              <input type="date" class="input" id="pet-dob" max="${new Date().toISOString().slice(0, 10)}" />
             </div>
             <div class="input-group">
               <label>Weight (kg)</label>
@@ -181,7 +189,11 @@ export default function renderPetProfiles(container) {
                         name,
                         species,
                         breed: document.getElementById('pet-breed')?.value || 'Mixed',
-                        age: parseInt(document.getElementById('pet-age')?.value) || 1,
+                        dob: document.getElementById('pet-dob')?.value || null,
+                        age: (() => { const d = document.getElementById('pet-dob')?.value; return d ? Math.max(0, Math.floor((Date.now() - Date.parse(d)) / 31557600000)) : 1; })(),
+                        records: [],
+                        allergies: [],
+                        conditions: [],
                         weight: parseFloat(document.getElementById('pet-weight')?.value) || 5,
                         gender: document.getElementById('pet-gender')?.value || 'Male',
                         emoji: speciesEmoji[species] || '🐾',
@@ -207,10 +219,14 @@ export default function renderPetProfiles(container) {
             });
         });
 
+        document.querySelectorAll('[data-open-record]').forEach(btn => {
+            btn.addEventListener('click', () => navigate('/pets/' + btn.dataset.openRecord));
+        });
+
         document.querySelectorAll('[data-shop-for]').forEach(btn => {
             btn.addEventListener('click', () => {
                 window.__vetadoc_category = '';
-                window.__vetadoc_search = btn.dataset.shopFor;
+                window.__vetadoc_species = btn.dataset.shopFor;
                 navigate('/catalog');
             });
         });

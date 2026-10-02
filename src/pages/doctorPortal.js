@@ -17,7 +17,7 @@ export default async function renderDoctorPortal(container) {
     <div class="admin-layout">
       <aside class="admin-sidebar doctor-sidebar">
         <div class="admin-sidebar-brand">
-          <div class="logo-icon" style="background:linear-gradient(135deg,#6366f1,#4f46e5)">
+          <div class="logo-icon" style="background:linear-gradient(135deg,#f97352,#ea580c)">
             <span class="material-icons-round" style="color:white">medical_services</span>
           </div>
           <div>
@@ -100,7 +100,7 @@ async function renderScheduleTab(el) {
     const s = stats.error ? { todayAppointments: 4, weekAppointments: 18, monthConsultations: 68, completionRate: 96 } : stats;
     const appointments = apptData.error ? [] : (apptData.appointments || []);
 
-    const statusColors = { scheduled: '#3b82f6', 'in-progress': '#f59e0b', completed: '#10b981', cancelled: '#ef4444' };
+    const statusColors = { scheduled: '#3b82f6', 'in-progress': '#f59e0b', completed: '#0f766e', cancelled: '#ef4444' };
 
     el.innerHTML = `
     <div class="admin-content">

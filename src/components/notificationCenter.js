@@ -135,7 +135,7 @@ function renderNotificationList() {
     list.querySelectorAll('.notif-item').forEach(item => {
         item.addEventListener('click', async (e) => {
             if (e.target.closest('.notif-dismiss')) return;
-            const id = parseInt(item.dataset.notifId);
+            const id = item.dataset.notifId;
             await markNotificationRead(id);
             item.classList.remove('unread');
             notifData.unreadCount = Math.max(0, notifData.unreadCount - 1);
@@ -146,7 +146,7 @@ function renderNotificationList() {
     list.querySelectorAll('.notif-dismiss').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const id = parseInt(btn.dataset.dismissNotif);
+            const id = btn.dataset.dismissNotif;
             await deleteNotification(id);
             await refreshNotifications();
         });
